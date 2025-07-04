@@ -1,6 +1,7 @@
 import asyncio
 from typing import Literal
 from bleak import BleakScanner, BleakClient
+from bleak.backends.characteristic import BleakGATTCharacteristic
 from PIL import Image, ImageFont, ImageDraw
 
 TARGET_PREFIX = "MXW"
@@ -11,8 +12,8 @@ CMD_UUID = "0000ae01-0000-1000-8000-00805f9b34fb"
 BUF_UUID = "0000ae03-0000-1000-8000-00805f9b34fb"
 
 
-async def notify_callback(sender, data: bytearray):
-    print(f"notification: {sender}: {data.hex()}")
+async def notify_callback(sender: BleakGATTCharacteristic, data: bytearray):
+    print(f"Notification: {sender.uuid}: {data.hex()}")
 
 
 async def init_print(client: BleakClient, width: int = 0x30, height: int = 0x71):
@@ -44,7 +45,7 @@ async def end_print(client: BleakClient):
         b"\x22\x21\xad\x00\x01\x00\x00\x00\x00",
         response=False,
     )
-    # should be waited until print signal gone
+    # should wait until print signal gone
     await asyncio.sleep(10)
 
 
@@ -89,36 +90,34 @@ def create_buffer(text: str, width: int = 0x30, height: int = 0x71):
 
 
 async def main():
-    device = None 
+    device = None
+    print("Searching device...")
     devices = await BleakScanner.discover(timeout=20)
     for d in devices:
         if d.name and d.name.startswith(TARGET_PREFIX):
             device = d
-            break 
+            break
     if device is None:
-        print("failed to find device")
+        print("Failed to find device")
         return
     async with BleakClient(device) as client:
-        print("Start notify..")
         if client.is_connected:
+            print("Start notify..")
             await client.start_notify(NOTIFY_UUID, notify_callback)
-            await init_print(client)
+            print("Start Printing..")
+            await init_print(client, height=48)
             service = client.services.get_service(SVC_UUID)
             characteristic = service.get_characteristic(BUF_UUID)
             max_write = characteristic.max_write_without_response_size
-
-            bufs = create_buffer("난 최고다 블루투스의 신이다")
-            print(f"buf len: {len(bufs)}")
+            print(f"max_write: {max_write}")
+            bufs = create_buffer("난 최고다 블루투스의 신이다", height=48)
             for i in range(0, len(bufs), max_write):
-                print(f"Writing {(bufs[i : i + max_write],)}")
-                print(f"start: {i}, end: {i + max_write}")
                 await client.write_gatt_char(
                     BUF_UUID,
                     bufs[i : i + max_write],
                     response=False,
                 )
             await end_print(client)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
