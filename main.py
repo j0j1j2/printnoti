@@ -2,6 +2,7 @@ import asyncio
 from typing import Literal
 from bleak import BleakScanner, BleakClient
 from PIL import Image, ImageFont, ImageDraw
+
 TARGET_PREFIX = "MXW"
 
 SVC_UUID = "0000ae30-0000-1000-8000-00805f9b34fb"
@@ -17,7 +18,22 @@ async def notify_callback(sender, data: bytearray):
 async def init_print(client: BleakClient, width: int = 0x30, height: int = 0x71):
     await client.write_gatt_char(
         CMD_UUID,
-        bytes([0x22, 0x21, 0xa9, 0x00, 0x04, 0x00, height & 0xff, 0x00, width & 0xff, 0x01, 0x00, 0x00]),
+        bytes(
+            [
+                0x22,
+                0x21,
+                0xA9,
+                0x00,
+                0x04,
+                0x00,
+                height & 0xFF,
+                0x00,
+                width & 0xFF,
+                0x01,
+                0x00,
+                0x00,
+            ]
+        ),
         response=False,
     )
 
@@ -31,6 +47,7 @@ async def end_print(client: BleakClient):
     # should be waited until print signal gone
     await asyncio.sleep(10)
 
+
 def bitlist_to_bytes(bit_list: list[Literal[0, 1]]):
     if len(bit_list) % 8 != 0:
         pad_len = 8 - (len(bit_list) % 8)
@@ -38,17 +55,18 @@ def bitlist_to_bytes(bit_list: list[Literal[0, 1]]):
 
     byte_list = []
     for i in range(0, len(bit_list), 8):
-        byte_bits = bit_list[i:i+8]
-        byte_bits = [bit^1 for bit in byte_bits]
+        byte_bits = bit_list[i : i + 8]
+        byte_bits = [bit ^ 1 for bit in byte_bits]
         byte_value = sum(bit << idx for idx, bit in enumerate(byte_bits))
         byte_list.append(byte_value)
 
     return bytes(byte_list)
 
-def create_buffer(text: str, width: int= 0x30, height: int=0x71): 
-    bitwidth = width * 8 
-    img = Image.new('1', (bitwidth, height), color=1)
-    
+
+def create_buffer(text: str, width: int = 0x30, height: int = 0x71):
+    bitwidth = width * 8
+    img = Image.new("1", (bitwidth, height), color=1)
+
     draw = ImageDraw.Draw(img)
 
     font_path = "./NanumGothicBold.ttf"
@@ -56,23 +74,27 @@ def create_buffer(text: str, width: int= 0x30, height: int=0x71):
 
     sx, sy, ex, ey = draw.textbbox((0, 0), text, font=font)
     text_width = ex - sx
-    text_height = ey - sy 
+    text_height = ey - sy
     x = (bitwidth - text_width) / 2
-    y = (height - text_height) / 2 
+    y = (height - text_height) / 2
 
     draw.text((x, y), text, font=font)
     pixels = list(img.getdata())
-    pixels = [bitlist_to_bytes(pixels[i:i+bitwidth]) for i in range(0, len(pixels), bitwidth)]
-   
-    return b''.join(pixels)
+    pixels = [
+        bitlist_to_bytes(pixels[i : i + bitwidth])
+        for i in range(0, len(pixels), bitwidth)
+    ]
+
+    return b"".join(pixels)
+
 
 async def main():
-    device = None
-
-    device = await BleakScanner.find_device_by_address(
-        "4864CDA2-269D-42B4-F8B7-1E315572F900",
-        timeout=20,
-    )
+    device = None 
+    devices = await BleakScanner.discover(timeout=20)
+    for d in devices:
+        if d.name and d.name.startswith(TARGET_PREFIX):
+            device = d
+            break 
     if device is None:
         print("failed to find device")
         return
@@ -82,9 +104,7 @@ async def main():
             await client.start_notify(NOTIFY_UUID, notify_callback)
             await init_print(client)
             service = client.services.get_service(SVC_UUID)
-            characteristic = service.get_characteristic(
-                BUF_UUID
-            )
+            characteristic = service.get_characteristic(BUF_UUID)
             max_write = characteristic.max_write_without_response_size
 
             bufs = create_buffer("난 최고다 블루투스의 신이다")
