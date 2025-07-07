@@ -110,7 +110,7 @@ async def main():
             characteristic = service.get_characteristic(BUF_UUID)
             max_write = characteristic.max_write_without_response_size
             print(f"max_write: {max_write}")
-            bufs = create_buffer("난 최고다 블루투스의 신이다", height=48)
+            bufs = create_buffer("카리나 화이팅", height=48)
             for i in range(0, len(bufs), max_write):
                 await client.write_gatt_char(
                     BUF_UUID,

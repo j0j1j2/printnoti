@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "aioimaplib>=2.0.1",
     "bleak>=1.0.1",
+    "diskcache>=5.6.3",
     "fastapi>=0.115.14",
     "pillow>=11.3.0",
 ]
